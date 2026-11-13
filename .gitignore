@@ -427,4 +427,8 @@ FodyWeavers.xsd
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
 
-.env
+# Python Virtual Environments
+.venv/
+venv/
+ENV/
+env/
