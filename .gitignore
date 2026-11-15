@@ -434,3 +434,6 @@ ENV/
 env/
 
 test.py
+
+data/*.db
+data/*.db-*

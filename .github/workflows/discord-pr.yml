@@ -1,0 +1,35 @@
+name: Discord PR Notification
+
+on:
+  pull_request:
+    branches: [ "main", "beta" ]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send PR Webhook
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ROLE_ID: "1571475523836580082"
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          ACTION: ${{ github.event.action }}
+        run: |
+          PAYLOAD=$(jq -n \
+            --arg role "<@&$ROLE_ID>" \
+            --arg action "$ACTION" \
+            --arg head "$HEAD_BRANCH" \
+            --arg base "$BASE_BRANCH" \
+            --arg msg "$PR_TITLE" \
+            --arg url "$PR_URL" \
+            --arg author "$AUTHOR" \
+            '{content: ("||" + $role + "|| **PR (" + $action + ")** `" + $head + " ➔ " + $base + "` by **" + $author + "**: `" + $msg + "`\n" + $url)}')
+
+          curl --fail-with-body -sS -H "Content-Type: application/json" \
+               -X POST \
+               -d "$PAYLOAD" \
+               "$WEBHOOK_URL"
