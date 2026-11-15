@@ -432,3 +432,5 @@ FodyWeavers.xsd
 venv/
 ENV/
 env/
+
+test.py
