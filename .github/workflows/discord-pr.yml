@@ -2,34 +2,53 @@ name: Discord PR Notification
 
 on:
   pull_request:
-    branches: [ "main", "beta" ]
+    types: [opened, reopened, closed]
+    branches:
+      - main
+      - beta
+      - dev
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Send PR Webhook
+      - name: Send Discord Embed
         env:
-          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          ROLE_ID: "1571475523836580082"
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          AUTHOR: ${{ github.event.pull_request.user.login }}
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
-          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
-          ACTION: ${{ github.event.action }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          PAYLOAD=$(jq -n \
-            --arg role "<@&$ROLE_ID>" \
-            --arg action "$ACTION" \
-            --arg head "$HEAD_BRANCH" \
-            --arg base "$BASE_BRANCH" \
-            --arg msg "$PR_TITLE" \
-            --arg url "$PR_URL" \
-            --arg author "$AUTHOR" \
-            '{content: ("||" + $role + "|| **PR (" + $action + ")** `" + $head + " ➔ " + $base + "` by **" + $author + "**: `" + $msg + "`\n" + $url)}')
+          ACTION="${{ github.event.action }}"
+          MERGED="${{ github.event.pull_request.merged }}"
+          
+          if [ "$ACTION" == "closed" ] && [ "$MERGED" == "true" ]; then
+            STATUS="Merged"
+            COLOR=10181046
+          elif [ "$ACTION" == "closed" ]; then
+            STATUS="Closed"
+            COLOR=15548997
+          else
+            STATUS="Opened"
+            COLOR=5763719
+          fi
 
-          curl --fail-with-body -sS -H "Content-Type: application/json" \
-               -X POST \
-               -d "$PAYLOAD" \
-               "$WEBHOOK_URL"
+          PR_TITLE=$(jq -Rs . <<< "${{ github.event.pull_request.title }}")
+
+          curl -H "Content-Type: application/json" -X POST -d "{
+            \"embeds\": [{
+              \"title\": \"🔀 Pull Request $STATUS (#${{ github.event.pull_request.number }})\",
+              \"url\": \"${{ github.event.pull_request.html_url }}\",
+              \"description\": $PR_TITLE,
+              \"color\": $COLOR,
+              \"fields\": [
+                {
+                  \"name\": \"Author\",
+                  \"value\": \"${{ github.actor }}\",
+                  \"inline\": true
+                },
+                {
+                  \"name\": \"Branch\",
+                  \"value\": \"\`${{ github.event.pull_request.head.ref }}\` → \`${{ github.event.pull_request.base.ref }}\`\",
+                  \"inline\": true
+                }
+              ]
+            }]
+          }" "$DISCORD_WEBHOOK"
