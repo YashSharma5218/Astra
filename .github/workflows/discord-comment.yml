@@ -3,6 +3,8 @@ name: Discord Comment Notification
 on:
   issue_comment:
     types: [created]
+  pull_request_review_comment:
+    types: [created]
 
 jobs:
   notify:
@@ -11,26 +13,39 @@ jobs:
       - name: Send Comment Embed to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUM: ${{ github.event.issue.number || github.event.pull_request.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title }}
+          COMMENT_URL: ${{ github.event.comment.html_url }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+          REPO_URL: ${{ github.event.repository.html_url }}
         run: |
-          COMMENT_BODY=$(jq -Rs . <<< "${{ github.event.comment.body }}")
-          
-          curl -H "Content-Type: application/json" -X POST -d "{
-            \"embeds\": [{
-              \"title\": \"💬 New comment on #${{ github.event.issue.number }} \`${{ github.event.issue.title }}\`\",
-              \"url\": \"${{ github.event.comment.html_url }}\",
-              \"description\": $COMMENT_BODY,
-              \"color\": 3447003,
-              \"fields\": [
-                {
-                  \"name\": \"Author\",
-                  \"value\": \"${{ github.actor }}\",
-                  \"inline\": true
-                },
-                {
-                  \"name\": \"Repository\",
-                  \"value\": \"[${{ github.repository }}](${{ github.event.repository.html_url }})\",
-                  \"inline\": true
-                }
-              ]
-            }]
-          }" "$DISCORD_WEBHOOK"
+          if [ "$EVENT_NAME" == "pull_request_review_comment" ]; then
+            TITLE="💬 New code review comment on #$ISSUE_NUM"
+          else
+            TITLE="💬 New comment on #$ISSUE_NUM `$ISSUE_TITLE`"
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg title "$TITLE" \
+            --arg url "$COMMENT_URL" \
+            --arg desc "$COMMENT_BODY" \
+            --arg author "$ACTOR" \
+            --arg repo "$REPO" \
+            --arg repo_url "$REPO_URL" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                description: $desc,
+                color: 3447003,
+                fields: [
+                  {name: "Author", value: $author, inline: true},
+                  {name: "Repository", value: "[\($repo)](\($repo_url))", inline: true}
+                ]
+              }]
+            }')
+
+          curl -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$DISCORD_WEBHOOK"
