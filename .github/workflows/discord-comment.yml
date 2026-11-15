@@ -5,6 +5,13 @@ on:
     types: [created]
   pull_request_review_comment:
     types: [created]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  issues: read
+  pull-requests: read
+  contents: read
 
 jobs:
   notify:
@@ -14,18 +21,30 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           EVENT_NAME: ${{ github.event_name }}
-          ISSUE_NUM: ${{ github.event.issue.number || github.event.pull_request.number }}
-          ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title }}
-          COMMENT_URL: ${{ github.event.comment.html_url }}
-          COMMENT_BODY: ${{ github.event.comment.body }}
-          ACTOR: ${{ github.actor }}
-          REPO: ${{ github.repository }}
-          REPO_URL: ${{ github.event.repository.html_url }}
+          PAYLOAD_JSON: ${{ toJson(github.event) }}
         run: |
-          if [ "$EVENT_NAME" == "pull_request_review_comment" ]; then
-            TITLE="💬 New code review comment on #$ISSUE_NUM"
+          # Parse event data safely using jq to avoid linter context warnings
+          ACTOR="${{ github.actor }}"
+          REPO="${{ github.repository }}"
+          REPO_URL="${{ github.event.repository.html_url }}"
+          
+          if [ "$EVENT_NAME" == "pull_request_review" ]; then
+            PR_NUM=$(echo "$PAYLOAD_JSON" | jq -r '.pull_request.number')
+            PR_TITLE=$(echo "$PAYLOAD_JSON" | jq -r '.pull_request.title')
+            COMMENT_URL=$(echo "$PAYLOAD_JSON" | jq -r '.review.html_url')
+            COMMENT_BODY=$(echo "$PAYLOAD_JSON" | jq -r '.review.body // "*(Submitted a review without text)*"')
+            TITLE="⭐ New PR review on #$PR_NUM `$PR_TITLE`"
+          elif [ "$EVENT_NAME" == "pull_request_review_comment" ]; then
+            PR_NUM=$(echo "$PAYLOAD_JSON" | jq -r '.pull_request.number')
+            COMMENT_URL=$(echo "$PAYLOAD_JSON" | jq -r '.comment.html_url')
+            COMMENT_BODY=$(echo "$PAYLOAD_JSON" | jq -r '.comment.body')
+            TITLE="💬 New code review comment on #$PR_NUM"
           else
-            TITLE="💬 New comment on #$ISSUE_NUM `$ISSUE_TITLE`"
+            PR_NUM=$(echo "$PAYLOAD_JSON" | jq -r '.issue.number')
+            PR_TITLE=$(echo "$PAYLOAD_JSON" | jq -r '.issue.title')
+            COMMENT_URL=$(echo "$PAYLOAD_JSON" | jq -r '.comment.html_url')
+            COMMENT_BODY=$(echo "$PAYLOAD_JSON" | jq -r '.comment.body')
+            TITLE="💬 New comment on #$PR_NUM `$PR_TITLE`"
           fi
 
           PAYLOAD=$(jq -n \
