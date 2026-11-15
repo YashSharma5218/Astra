@@ -1,0 +1,36 @@
+name: Discord Comment Notification
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Comment Embed to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          COMMENT_BODY=$(jq -Rs . <<< "${{ github.event.comment.body }}")
+          
+          curl -H "Content-Type: application/json" -X POST -d "{
+            \"embeds\": [{
+              \"title\": \"💬 New comment on #${{ github.event.issue.number }} \`${{ github.event.issue.title }}\`\",
+              \"url\": \"${{ github.event.comment.html_url }}\",
+              \"description\": $COMMENT_BODY,
+              \"color\": 3447003,
+              \"fields\": [
+                {
+                  \"name\": \"Author\",
+                  \"value\": \"${{ github.actor }}\",
+                  \"inline\": true
+                },
+                {
+                  \"name\": \"Repository\",
+                  \"value\": \"[${{ github.repository }}](${{ github.event.repository.html_url }})\",
+                  \"inline\": true
+                }
+              ]
+            }]
+          }" "$DISCORD_WEBHOOK"
