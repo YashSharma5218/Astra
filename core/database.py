@@ -13,10 +13,10 @@ from contextlib import asynccontextmanager
 
 import aiosqlite
 
-from game.items import Item
+from game.items import SLOTS, Item, make_uid, normalize_uid
 
 SCHEMA_PATH = pathlib.Path(__file__).with_name("schema.sql")
-EQUIP_COLUMNS = {"weapon": "weapon_id", "armor": "armor_id"}   # whitelist: spell, relic later
+EQUIP_COLUMNS = {slot: f"{slot}_id" for slot in SLOTS}     # whitelist of loadout columns
 
 
 class Database:
@@ -74,13 +74,29 @@ class Database:
             "WHERE user_id = ?", (gold, shards, gems, user_id))
 
     # ---- items ----
+    async def next_seq(self, name: str) -> int:
+        """Next number of a named counter (1, 2, 3 ...). Call it inside a transaction."""
+        await self.conn.execute(
+            "INSERT INTO counters (name, value) VALUES (?, 1) "
+            "ON CONFLICT(name) DO UPDATE SET value = value + 1", (name,))
+        cur = await self.conn.execute("SELECT value FROM counters WHERE name = ?", (name,))
+        return (await cur.fetchone())[0]
+
     async def add_item(self, owner_id: int, item: Item) -> int:
+        """Save a new item. It gets the next code of its slot, like H12 (counted per slot)."""
+        item.uid = make_uid(item.slot, await self.next_seq(f"item_{item.slot}"))
         cur = await self.conn.execute(
-            "INSERT INTO items (owner_id, slot, rarity, element, base_json, affix_json) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (owner_id, item.slot, item.rarity, item.element, item.base_json(), item.affix_json()))
+            "INSERT INTO items (uid, owner_id, slot, rarity, element, base_json, affix_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (item.uid, owner_id, item.slot, item.rarity, item.element,
+             item.base_json(), item.affix_json()))
         item.id, item.owner_id = cur.lastrowid, owner_id
         return item.id
+
+    async def get_item_by_uid(self, uid: str) -> Item | None:
+        cur = await self.conn.execute("SELECT * FROM items WHERE uid = ?", (normalize_uid(uid),))
+        row = await cur.fetchone()
+        return Item.from_row(row) if row else None
 
     async def get_item(self, item_id: int) -> Item | None:
         cur = await self.conn.execute("SELECT * FROM items WHERE id = ?", (item_id,))
@@ -99,18 +115,22 @@ class Database:
                                 (item.affix_json(), item.id))
 
     # ---- loadouts ----
-    async def set_loadout(self, user_id: int, preset: int, weapon_id: int | None = None,
-                          armor_id: int | None = None, disposition: str = "balanced") -> None:
+    async def set_loadout(self, user_id: int, preset: int, item_ids: dict[str, int | None] | None = None,
+                          disposition: str = "balanced") -> None:
+        """Replace a whole preset. `item_ids` maps slot -> item id; missing slots become empty."""
+        item_ids = item_ids or {}
+        cols = ", ".join(EQUIP_COLUMNS[slot] for slot in SLOTS)
+        marks = ", ".join("?" for _ in SLOTS)
+        sets = ", ".join(f"{EQUIP_COLUMNS[slot]} = excluded.{EQUIP_COLUMNS[slot]}" for slot in SLOTS)
         await self.conn.execute(
-            "INSERT INTO loadouts (user_id, preset, weapon_id, armor_id, disposition) "
-            "VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, preset) DO UPDATE SET "
-            "weapon_id = excluded.weapon_id, armor_id = excluded.armor_id, "
-            "disposition = excluded.disposition",
-            (user_id, preset, weapon_id, armor_id, disposition))
+            f"INSERT INTO loadouts (user_id, preset, {cols}, disposition) "
+            f"VALUES (?, ?, {marks}, ?) ON CONFLICT(user_id, preset) DO UPDATE SET "
+            f"{sets}, disposition = excluded.disposition",
+            (user_id, preset, *(item_ids.get(slot) for slot in SLOTS), disposition))
 
     async def equip_item(self, user_id: int, preset: int, slot: str, item_id: int) -> None:
         """Put one item into a preset's slot without touching the other slots."""
-        column = EQUIP_COLUMNS[slot]      # KeyError for slots that are not in version 1
+        column = EQUIP_COLUMNS[slot]      # KeyError for an unknown slot
         await self.conn.execute(
             "INSERT OR IGNORE INTO loadouts (user_id, preset) VALUES (?, ?)", (user_id, preset))
         await self.conn.execute(
@@ -148,11 +168,16 @@ class Database:
         wins, losses, draws = await cur.fetchone()
         return wins, losses, draws
 
-    async def get_equipped(self, user_id: int, preset: int = 1) -> tuple[Item | None, Item | None]:
-        """Return (weapon, armor) of a preset; either can be None if the slot is empty."""
+    async def get_equipped(self, user_id: int, preset: int = 1) -> dict[str, Item | None]:
+        """Return {slot: Item or None} for every slot of a preset."""
         lo = await self.get_loadout(user_id, preset)
-        if lo is None:
-            return None, None
-        weapon = await self.get_item(lo["weapon_id"]) if lo["weapon_id"] else None
-        armor = await self.get_item(lo["armor_id"]) if lo["armor_id"] else None
-        return weapon, armor
+        gear: dict[str, Item | None] = {}
+        for slot in SLOTS:
+            item_id = lo[EQUIP_COLUMNS[slot]] if lo else None
+            gear[slot] = await self.get_item(item_id) if item_id else None
+        return gear
+
+    # ---- levels ----
+    async def set_level(self, user_id: int, level: int, xp: int = 0) -> None:
+        await self.conn.execute("UPDATE players SET level = ?, xp = ? WHERE user_id = ?",
+                                (level, xp, user_id))

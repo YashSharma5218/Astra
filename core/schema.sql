@@ -6,13 +6,16 @@ CREATE TABLE IF NOT EXISTS players (
     shards       INTEGER NOT NULL DEFAULT 0 CHECK (shards >= 0),
     gems         INTEGER NOT NULL DEFAULT 0 CHECK (gems >= 0),
     pity         INTEGER NOT NULL DEFAULT 0,          -- failed rerolls since the last T4 or T5
+    level        INTEGER NOT NULL DEFAULT 1 CHECK (level >= 1),
+    xp           INTEGER NOT NULL DEFAULT 0 CHECK (xp >= 0),   -- XP towards the next level
     created_at   INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 
 CREATE TABLE IF NOT EXISTS items (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,      -- internal key, used by loadouts
+    uid          TEXT NOT NULL UNIQUE,                  -- public code players type, like H12 (slot letter + count)
     owner_id     INTEGER NOT NULL REFERENCES players(user_id),
-    slot         TEXT NOT NULL,                        -- weapon, armor (spell, relic later)
+    slot         TEXT NOT NULL,                        -- weapon, helmet, chestplate, leggings, boots
     rarity       TEXT NOT NULL,
     element      TEXT NOT NULL DEFAULT 'neutral',
     base_json    TEXT NOT NULL,                        -- base stats
@@ -24,10 +27,11 @@ CREATE INDEX IF NOT EXISTS idx_items_owner ON items(owner_id);
 CREATE TABLE IF NOT EXISTS loadouts (
     user_id      INTEGER NOT NULL REFERENCES players(user_id),
     preset       INTEGER NOT NULL CHECK (preset BETWEEN 1 AND 3),
-    weapon_id    INTEGER REFERENCES items(id),
-    armor_id     INTEGER REFERENCES items(id),
-    spell_id     INTEGER REFERENCES items(id),
-    relic_id     INTEGER REFERENCES items(id),
+    weapon_id      INTEGER REFERENCES items(id),
+    helmet_id      INTEGER REFERENCES items(id),
+    chestplate_id  INTEGER REFERENCES items(id),
+    leggings_id    INTEGER REFERENCES items(id),
+    boots_id       INTEGER REFERENCES items(id),
     disposition  TEXT NOT NULL DEFAULT 'balanced',     -- async policy: aggressive, balanced, defensive
     PRIMARY KEY (user_id, preset)
 );
@@ -58,3 +62,10 @@ CREATE TABLE IF NOT EXISTS duels (
     created_at   INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_duels_players ON duels(player_a, player_b);
+
+-- Named counters. Item codes use one counter per slot (item_weapon, item_helmet ...), so a
+-- code is never reused, even after items are deleted.
+CREATE TABLE IF NOT EXISTS counters (
+    name   TEXT PRIMARY KEY,
+    value  INTEGER NOT NULL DEFAULT 0
+);

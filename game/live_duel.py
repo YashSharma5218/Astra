@@ -17,7 +17,7 @@ class Submit(str, Enum):
     OK = "ok"
     NOT_PLAYER = "not_player"
     LOCKED = "locked"
-    NO_ENERGY = "no_energy"
+    NO_MANA = "no_mana"
     OVER = "over"
 
 
@@ -63,7 +63,7 @@ class LiveDuel:
         if user_id in self.choices:
             return Submit.LOCKED                    # a choice is final once locked in
         if move not in Duel.legal_moves(self.fighters[user_id]):
-            return Submit.NO_ENERGY
+            return Submit.NO_MANA
         self.choices[user_id] = move
         return Submit.OK
 
@@ -118,7 +118,7 @@ class LiveDuel:
     def to_log(self) -> list[dict]:
         return [{"round": r.number,
                  "moves": {n: m.value for n, m in r.moves.items()},
-                 "events": r.events, "hp": r.hp, "energy": r.energy}
+                 "events": r.events, "hp": r.hp, "mana": r.mana}
                 for r in self.duel.history]
 
     def log_json(self) -> str:

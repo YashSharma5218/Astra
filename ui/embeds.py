@@ -3,39 +3,44 @@ from __future__ import annotations
 
 import discord
 
-from game.combat import ENERGY_CAP, MAX_ROUNDS, SKILL_COST, Fighter, format_round
-from game.items import Item
+from game.combat import MAX_ROUNDS, Fighter, format_round
+from game.items import SLOTS, Item
 from game.live_duel import LiveDuel
+from game.stats import xp_to_next
 
 PAGE_SIZE = 8
 
 
 def item_line(item: Item, equipped: bool = False) -> str:
     tag = " **(equipped)**" if equipped else ""
-    return f"`#{item.id}` {item.describe()}{tag}"
+    return f"`{item.uid}` {item.describe()}{tag}"
 
 
 def stats_text(f: Fighter) -> str:
     return (
-        f"HP {f.max_hp} | ATK {f.attack:g} | DEF {f.defense_reduction:.0%}\n"
-        f"Crit {f.crit_chance:.0%} (x{f.crit_mult:.2f}) | Armor Pen {f.armor_pen:.0%}\n"
+        f"HP {f.max_hp} | Mana {f.max_mana} | ATK {f.attack:g} | STR {f.strength:g}\n"
+        f"DEF {f.defense:g} ({f.defense_reduction:.0%}) | Crit {f.crit_chance:.0%} (x{f.crit_mult:.2f}) "
+        f"| Armor Pen {f.armor_pen:.0%}\n"
         f"Dodge {f.dodge:.0%} | Lifesteal {f.lifesteal:.0%} | Thorns {f.thorns:.0%}\n"
-        f"Element: {f.element.title()}"
+        f"Element: {f.element.title()} | Skill: {f.skill_name} ({f.skill_cost} mana)"
     )
 
 
-def profile_embed(user: discord.abc.User, player, weapon: Item | None,
-                  armor: Item | None, fighter: Fighter, preset: int,
+def profile_embed(user: discord.abc.User, player, gear: dict[str, Item | None],
+                  fighter: Fighter, preset: int,
                   record: tuple[int, int, int] = (0, 0, 0)) -> discord.Embed:
     embed = discord.Embed(title=f"{user.display_name}'s fighter")
+    embed.add_field(
+        name="Level",
+        value=f"Level {player['level']} | XP {player['xp']}/{xp_to_next(player['level'])}",
+        inline=False)
     embed.add_field(
         name="Resources",
         value=f"Gold {player['gold']} | Shards {player['shards']} | Gems {player['gems']}",
         inline=False)
-    embed.add_field(name=f"Weapon (preset {preset})",
-                    value=item_line(weapon) if weapon else "Nothing equipped", inline=False)
-    embed.add_field(name=f"Armor (preset {preset})",
-                    value=item_line(armor) if armor else "Nothing equipped", inline=False)
+    lines = [f"**{slot.title()}:** " + (item_line(gear[slot]) if gear.get(slot) else "empty")
+             for slot in SLOTS]
+    embed.add_field(name=f"Gear (preset {preset})", value="\n".join(lines), inline=False)
     embed.add_field(name="Duel stats", value=stats_text(fighter), inline=False)
     wins, losses, draws = record
     embed.add_field(name="Duel record", value=f"Wins {wins} | Losses {losses} | Draws {draws}",
@@ -53,7 +58,7 @@ def inventory_embed(user: discord.abc.User, items: list[Item], equipped_ids: set
         embed.description = "Nothing here yet."
     else:
         embed.description = "\n".join(item_line(i, i.id in equipped_ids) for i in items)
-    embed.set_footer(text=f"Page {page} of {pages}  |  /equip item_id to use an item")
+    embed.set_footer(text=f"Page {page} of {pages}  |  /equip code to use an item")
     return embed
 
 
@@ -75,12 +80,15 @@ def hp_bar(hp: int, max_hp: int, width: int = 10) -> str:
     return f"{'█' * filled}{'░' * (width - filled)} {hp}/{max_hp}"
 
 
-def challenge_embed(challenger: str, opponent: str, seconds: int) -> discord.Embed:
+def challenge_embed(challenger: str, opponent: str, seconds: int,
+                    real_levels: bool = False) -> discord.Embed:
+    levels = ("Both fight at their real levels." if real_levels
+              else "Both fight at the average of their two levels.")
     return discord.Embed(
         title="Duel challenge",
         description=(f"**{challenger}** challenges **{opponent}** to a duel.\n"
                      f"Up to {MAX_ROUNDS} rounds, higher HP wins. Each round you secretly pick "
-                     f"Attack, Guard or Skill.\n{opponent} has {seconds} seconds to accept."))
+                     f"Attack, Guard or Skill. {levels}\n{opponent} has {seconds} seconds to accept."))
 
 
 def duel_round_embed(live: LiveDuel, deadline: int) -> discord.Embed:
@@ -94,9 +102,9 @@ def duel_round_embed(live: LiveDuel, deadline: int) -> discord.Embed:
         f = live.fighters[uid]
         status = "Locked in" if live.is_locked(uid) else "Waiting for a move"
         embed.add_field(
-            name=f.name,
-            value=f"{hp_bar(f.hp, f.max_hp)}\nEnergy {f.energy}/{ENERGY_CAP} "
-                  f"(Skill costs {SKILL_COST})\n{status}",
+            name=f"{f.name} (Lv {f.level})",
+            value=f"{hp_bar(f.hp, f.max_hp)}\nMana {f.mana}/{f.max_mana} "
+                  f"({f.skill_name} costs {f.skill_cost})\n{status}",
             inline=True)
     if live.last_result:
         embed.add_field(name=f"Round {live.last_result.number} result",

@@ -10,6 +10,7 @@ from cogs.game._common import require_player
 from game.combat import Move
 from game.items import build_fighter
 from game.live_duel import LiveDuel, Submit
+from game.stats import duel_levels
 from ui.embeds import challenge_embed, duel_final_embed, duel_round_embed
 
 ACTIVE_PRESET = 1
@@ -20,7 +21,7 @@ MAX_NAME = 20
 SUBMIT_MESSAGES = {
     Submit.NOT_PLAYER: "This is not your duel.",
     Submit.LOCKED: "You already locked in a move this round. It is final.",
-    Submit.NO_ENERGY: "Not enough energy for a Skill. Pick Attack or Guard.",
+    Submit.NO_MANA: "Not enough mana for your Skill. Pick Attack or Guard.",
     Submit.OVER: "This duel is over.",
 }
 
@@ -155,9 +156,12 @@ class Duel(commands.Cog):
         self.busy: set[int] = set()             # players in a challenge or a duel
 
     @app_commands.command(name="duel", description="Challenge another player to a duel")
-    @app_commands.describe(opponent="The player to fight")
+    @app_commands.describe(
+        opponent="The player to fight",
+        real_levels="Fight at your real levels instead of the average of both")
     @app_commands.guild_only()
-    async def duel(self, interaction: discord.Interaction, opponent: discord.Member):
+    async def duel(self, interaction: discord.Interaction, opponent: discord.Member,
+                   real_levels: bool = False):
         db, me = self.bot.db, interaction.user
         if await require_player(interaction, db) is None:
             return
@@ -176,26 +180,29 @@ class Duel(commands.Cog):
         # No await between the busy check above and this line, so two commands cannot both pass
         self.busy.update((me.id, opponent.id))
         try:
-            await self.run_challenge(interaction, me, opponent)
+            await self.run_challenge(interaction, me, opponent, real_levels)
         finally:
             self.busy.discard(me.id)
             self.busy.discard(opponent.id)
 
-    async def run_challenge(self, interaction, me, opponent):
+    async def run_challenge(self, interaction, me, opponent, real_levels=False):
         view = ChallengeView(me.id, opponent.id)
         await interaction.response.send_message(
             content=opponent.mention,
-            embed=challenge_embed(me.display_name, opponent.display_name, CHALLENGE_SECONDS),
+            embed=challenge_embed(me.display_name, opponent.display_name, CHALLENGE_SECONDS,
+                                   real_levels),
             view=view)
         timed_out = await view.wait()
         if not view.accepted:
             text = "The challenge expired." if timed_out else "The challenge was declined."
             await interaction.edit_original_response(content=text, embed=None, view=None)
             return
+        rows = [await self.bot.db.get_player(u.id) for u in (me, opponent)]
+        levels = duel_levels(rows[0]["level"], rows[1]["level"], real_levels)
         fighters = []
-        for user in (me, opponent):
-            weapon, armor = await self.bot.db.get_equipped(user.id, ACTIVE_PRESET)
-            fighters.append(build_fighter(user.display_name[:MAX_NAME], weapon, armor))
+        for user, level in zip((me, opponent), levels):
+            gear = await self.bot.db.get_equipped(user.id, ACTIVE_PRESET)
+            fighters.append(build_fighter(user.display_name[:MAX_NAME], gear, level))
         live = LiveDuel(me.id, fighters[0], opponent.id, fighters[1])
         await DuelRunner(self.bot, interaction, live).run()
 

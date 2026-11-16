@@ -16,26 +16,30 @@ class Move(str, Enum):
     SKILL = "skill"
 
 
-# --- Tunable constants (starting values, tune in playtests) -----------------
+# --- Tunable constants (tuned in simulation, see the Combat Spec) -----------
 MAX_ROUNDS = 5
-START_ENERGY = 1
-ENERGY_CAP = 3
-SKILL_COST = 2
-SKILL_MULT = 1.5          # v1 Skill is a heavy weapon strike
-GUARD_BLOCK = 0.60        # share of a hit a guard blocks
-SKILL_PIERCE = 0.5        # Skill pierces half of the guard
-INTERRUPT_MULT = 0.5      # Skill hit while the opponent attacks lands at half
+# Skill is the weapon's ability and is paid with mana. The mana numbers are placeholders
+# that copy the old energy timing (start 1, +1 a round, Skill costs 2, cap 3) in units of 30.
+START_MANA = 30
+MANA_REGEN = 30           # gained at the end of every round
+GUARD_MANA_BONUS = 30     # extra mana for playing Guard
+DEFAULT_SKILL_COST = 60   # the basic test weapon's Skill
+DEFAULT_SKILL_MULT = 1.5  # heavy strike: 1.5 times the base hit
+GUARD_BLOCK = 0.70        # share of a hit a guard blocks
+SKILL_PIERCE = 0.8        # a Skill keeps 80% of the guard's block (70% -> 56%)
+INTERRUPT_MULT = 0.45     # Skill hit while the opponent attacks lands at 45%
+GUARD_COUNTER = 0.70      # a Guard against an Attack counters for 70% of the guarder's attack
 ELEMENT_MULT = 1.25       # 1.25 to 1.5 in the design doc
 BEATS = {"fire": "ice", "ice": "lightning", "lightning": "water", "water": "fire"}
 
 # Hard caps so no single stat decides a duel
 CAPS = {
-    "dodge": 0.20,
-    "crit_chance": 0.40,
+    "dodge": 0.25,
+    "crit_chance": 0.70,
     "lifesteal": 0.25,
     "armor_pen": 0.50,
     "defense_reduction": 0.70,
-    "thorns": 0.30,
+    "thorns": 0.20,
 }
 
 
@@ -46,8 +50,15 @@ class Fighter:
     attack: float = 20.0
     defense_reduction: float = 0.10
     armor_pen: float = 0.0
-    crit_chance: float = 0.05
+    crit_chance: float = 0.30       # base mechanic: 30% chance, +50% damage
     crit_mult: float = 1.5
+    strength: float = 0.0           # percent bonus to attack damage
+    defense: float = 0.0            # defense points, for display; the engine uses defense_reduction
+    level: int = 1
+    max_mana: int = 100
+    skill_name: str = "Heavy Strike"
+    skill_cost: int = DEFAULT_SKILL_COST
+    skill_mult: float = DEFAULT_SKILL_MULT
     dodge: float = 0.0
     lifesteal: float = 0.0
     thorns: float = 0.0
@@ -56,7 +67,7 @@ class Fighter:
 
     # live duel state
     hp: int = field(init=False)
-    energy: int = field(init=False)
+    mana: int = field(init=False)
     damage_dealt: int = field(init=False, default=0)
 
     def __post_init__(self) -> None:
@@ -66,7 +77,7 @@ class Fighter:
 
     def reset(self) -> None:
         self.hp = self.max_hp
-        self.energy = START_ENERGY
+        self.mana = min(START_MANA, self.max_mana)
         self.damage_dealt = 0
 
 
@@ -76,15 +87,15 @@ class RoundResult:
     moves: dict[str, Move]
     events: list[str]
     hp: dict[str, int]
-    energy: dict[str, int]
+    mana: dict[str, int]
 
 
-def _incoming(att_move: Move, dfn_move: Move) -> tuple[float, float] | None:
-    """Return (power, block share) for the hit `att_move` lands on `dfn_move`."""
+def _incoming(att: Fighter, att_move: Move, dfn_move: Move) -> tuple[float, float] | None:
+    """Return (power, block share) for the hit `att` lands with `att_move` on `dfn_move`."""
     if att_move is Move.ATTACK:
         return 1.0, (GUARD_BLOCK if dfn_move is Move.GUARD else 0.0)
     if att_move is Move.SKILL:
-        power = SKILL_MULT * (INTERRUPT_MULT if dfn_move is Move.ATTACK else 1.0)
+        power = att.skill_mult * (INTERRUPT_MULT if dfn_move is Move.ATTACK else 1.0)
         return power, (GUARD_BLOCK * SKILL_PIERCE if dfn_move is Move.GUARD else 0.0)
     return None  # Guard deals no damage
 
@@ -109,7 +120,7 @@ class Duel:
     @staticmethod
     def legal_moves(f: Fighter) -> list[Move]:
         moves = [Move.ATTACK, Move.GUARD]
-        if f.energy >= SKILL_COST:
+        if f.mana >= f.skill_cost:
             moves.append(Move.SKILL)
         return moves
 
@@ -123,13 +134,13 @@ class Duel:
 
     # ---- one hit ---------------------------------------------------------
     def _hit(self, att: Fighter, dfn: Fighter, att_move: Move, dfn_move: Move):
-        power, block = _incoming(att_move, dfn_move)
+        power, block = _incoming(att, att_move, dfn_move)
         # 1. dodge (Skill cannot be dodged)
         if att_move is not Move.SKILL and self.rng.random() < dfn.dodge:
             return 0, False, True
-        dmg = att.attack * power
-        # 2. crit
-        crit = self.rng.random() < att.crit_chance
+        dmg = att.attack * power * (1 + att.strength / 100)
+        # 2. crit (a guarded hit cannot crit)
+        crit = dfn_move is not Move.GUARD and self.rng.random() < att.crit_chance
         if crit:
             dmg *= att.crit_mult
         # 3. element
@@ -147,13 +158,13 @@ class Duel:
             raise RuntimeError("duel is already over")
         for f, m in ((self.a, move_a), (self.b, move_b)):
             if m not in self.legal_moves(f):
-                raise ValueError(f"{f.name} cannot play {m.value} with {f.energy} energy")
+                raise ValueError(f"{f.name} cannot play {m.value} with {f.mana} mana")
         self.round += 1
         events: list[str] = []
 
         for f, m in ((self.a, move_a), (self.b, move_b)):
             if m is Move.SKILL:
-                f.energy -= SKILL_COST
+                f.mana -= f.skill_cost
 
         # Both hits are worked out before either is applied (simultaneous)
         hits = []
@@ -167,7 +178,7 @@ class Duel:
         # Pass 1: apply all damage at the same time
         landed = []
         for att, dfn, am, dmg, crit, dodged in hits:
-            label = "Skill" if am is Move.SKILL else "Attack"
+            label = att.skill_name if am is Move.SKILL else "Attack"
             if dodged:
                 events.append(f"{dfn.name} dodges {att.name}'s {label}.")
                 continue
@@ -177,6 +188,16 @@ class Duel:
             events.append(f"{att.name}'s {label}{' (CRIT)' if crit else ''} hits "
                           f"{dfn.name} for {dmg}.")
             landed.append((att, dfn, dmg))
+
+        # Guard counter: guarding against an Attack hits back (no crit, no dodge, no element)
+        for att, dfn, am, dm in ((self.a, self.b, move_a, move_b),
+                                 (self.b, self.a, move_b, move_a)):
+            if am is Move.ATTACK and dm is Move.GUARD:
+                dmg = dfn.attack * GUARD_COUNTER * (1 + dfn.strength / 100) * (1 - att.defense_reduction * (1 - dfn.armor_pen))
+                dmg = min(max(1, round(dmg)), att.hp)
+                att.hp -= dmg
+                dfn.damage_dealt += dmg
+                events.append(f"{dfn.name} blocks and counters {att.name} for {dmg}.")
 
         # Pass 2: thorns reflect damage actually taken (no crit, no bounce back)
         for att, dfn, dmg in landed:
@@ -198,16 +219,16 @@ class Duel:
         if not hits:
             events.append("Both players guard. Nothing happens.")
 
-        # Energy: +1 each round, Guard gives 1 extra, capped
+        # Mana: regenerates every round, Guard gives extra, capped at max mana
         for f, m in ((self.a, move_a), (self.b, move_b)):
-            f.energy = min(ENERGY_CAP, f.energy + 1 + (1 if m is Move.GUARD else 0))
+            f.mana = min(f.max_mana, f.mana + MANA_REGEN + (GUARD_MANA_BONUS if m is Move.GUARD else 0))
 
         result = RoundResult(
             number=self.round,
             moves={self.a.name: move_a, self.b.name: move_b},
             events=events,
             hp={self.a.name: self.a.hp, self.b.name: self.b.hp},
-            energy={self.a.name: self.a.energy, self.b.name: self.b.energy},
+            mana={self.a.name: self.a.mana, self.b.name: self.b.mana},
         )
         self.history.append(result)
         return result
@@ -228,7 +249,7 @@ def policy_move(me: Fighter, opponent: Fighter, rng: random.Random) -> Move:
     interrupts Skill. Illegal moves are dropped and the weights renormalised.
     """
     weights = dict(DISPOSITIONS.get(me.disposition, DISPOSITIONS["balanced"]))
-    if opponent.energy >= SKILL_COST:
+    if opponent.mana >= opponent.skill_cost:
         weights[Move.ATTACK] *= 1.3
     legal = Duel.legal_moves(me)
     moves = [m for m in legal]
