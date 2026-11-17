@@ -96,16 +96,18 @@ def roll_haul(seed: int, zone: Zone) -> Haul:
 def roll_push(seed: int, zone: Zone, haul: Haul) -> PushResult:
     """What Push Deeper does for this expedition. The same seed always gives the same answer.
 
-    Success: gold and shards double, every item is rolled again on the better rarity table,
-    one bonus item is added, and there is a chance of a Socket Gem. Failure: everything is lost.
+    Success: gold and shards double, the player keeps every item they were shown, one bonus item
+    is added from the better rarity table, and there is a chance of a Socket Gem. A success is
+    never worse than banking. Failure: everything is lost.
     """
     rng = random.Random(f"{seed}:push")
     success = rng.random() < PUSH_CHANCE
-    items = [_roll_item(rng, zone, zone.deep_weights) for _ in range(len(haul.items) + 1)]
+    bonus = _roll_item(rng, zone, zone.deep_weights)
     gems = 1 if rng.random() < GEM_CHANCE else 0
     if not success:
         return PushResult(False, None)
-    return PushResult(True, Haul(haul.gold * PUSH_MULT, haul.shards * PUSH_MULT, gems, items))
+    return PushResult(True, Haul(haul.gold * PUSH_MULT, haul.shards * PUSH_MULT, gems,
+                                 list(haul.items) + [bonus]))
 
 
 def build_item(spec: ItemSpec) -> Item:

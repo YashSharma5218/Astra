@@ -170,8 +170,8 @@ def haul_embed(zone: Zone, haul: Haul) -> discord.Embed:
         title=f"Expedition back: {zone.name}",
         description=("**Bank & Leave** keeps this haul.\n"
                      f"**Push Deeper** is a gamble: {PUSH_CHANCE:.0%} to double the gold and shards, "
-                     f"get better gear plus a bonus item and a chance at a Socket Gem, "
-                     f"otherwise you lose everything."))
+                     f"keep all your items, and add a bonus item from a better table plus a chance "
+                     f"at a Socket Gem. Otherwise you lose everything."))
     embed.add_field(name="Your haul", value=haul_lines(haul), inline=False)
     return embed
 
