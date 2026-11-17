@@ -4,8 +4,10 @@ from __future__ import annotations
 import discord
 
 from game.combat import MAX_ROUNDS, Fighter, format_round
-from game.items import SLOTS, Item
+from game.crafting import LOCK_COST_MULT, reroll_cost, salvage_value
+from game.items import PITY_THRESHOLD, SLOTS, Item
 from game.live_duel import LiveDuel
+from game.loot import MAX_RUNS, PUSH_CHANCE, Haul, Zone, build_item
 from game.stats import xp_to_next
 
 PAGE_SIZE = 8
@@ -135,3 +137,87 @@ def duel_final_embed(live: LiveDuel, winner_id: int | None, record_line: str | N
         footer += "  |  This result could not be saved"
     embed.set_footer(text=footer)
     return embed
+
+
+# ---- expeditions ----
+def haul_lines(haul: Haul, items: list[Item] | None = None) -> str:
+    """Gold, shards, gems and items of a haul. Pass saved `items` to show their codes."""
+    lines = [f"Gold {haul.gold} | Shards {haul.shards}" + (f" | Gems {haul.gems}" if haul.gems else "")]
+    if items is not None:
+        lines += [item_line(i) for i in items]
+    else:                                        # not saved yet, so there is no code to show
+        lines += [build_item(spec).describe() for spec in haul.items]
+    return "\n".join(lines)
+
+
+def expedition_started_embed(zone: Zone, ends_at: int, runs_left: int | None = None) -> discord.Embed:
+    text = (f"Your fighter heads out and will be back <t:{ends_at}:R>.\n"
+            "Use /scavenge again when time is up to collect it. You can close Discord in the meantime.")
+    if runs_left is not None:
+        text += f"\nExpeditions left in this 24 hours: {runs_left} of {MAX_RUNS}."
+    return discord.Embed(title=f"Expedition: {zone.name}", description=text)
+
+
+def expedition_waiting_embed(zone_name: str, ends_at: int) -> discord.Embed:
+    return discord.Embed(
+        title=f"Expedition: {zone_name}",
+        description=f"Your expedition is still out and will be back <t:{ends_at}:R>.")
+
+
+def haul_embed(zone: Zone, haul: Haul) -> discord.Embed:
+    """What the expedition found, shown before the player chooses Bank or Push."""
+    embed = discord.Embed(
+        title=f"Expedition back: {zone.name}",
+        description=("**Bank & Leave** keeps this haul.\n"
+                     f"**Push Deeper** is a gamble: {PUSH_CHANCE:.0%} to double the gold and shards, "
+                     f"get better gear plus a bonus item and a chance at a Socket Gem, "
+                     f"otherwise you lose everything."))
+    embed.add_field(name="Your haul", value=haul_lines(haul), inline=False)
+    return embed
+
+
+def expedition_result_embed(title: str, text: str, haul: Haul | None = None,
+                            items: list[Item] | None = None) -> discord.Embed:
+    embed = discord.Embed(title=title, description=text)
+    if haul is not None:
+        embed.add_field(name="Added to your account", value=haul_lines(haul, items), inline=False)
+    return embed
+
+
+# ---- crafting ----
+def reroll_embed(item: Item, locked: set[int], shards: int, pity: int,
+                 note: str | None = None, before: list[str] | None = None) -> discord.Embed:
+    """The reroll screen: base line, numbered affix lines with locks, cost, shards and pity."""
+    head = item.describe().split(" | ")[0]
+    embed = discord.Embed(
+        title=f"Reroll {item.uid}",
+        description=note or ("Lock the lines you want to keep, then press Reroll. "
+                             f"Each lock multiplies the cost by {LOCK_COST_MULT}."))
+    embed.add_field(name=head, value="\n".join(
+        f"{n}. {a.describe()}" + (" (locked)" if n - 1 in locked else "")
+        for n, a in enumerate(item.affixes, 1)), inline=False)
+    if before:
+        embed.add_field(name="Before", value="\n".join(before), inline=False)
+    embed.add_field(name="Next reroll", value=f"{reroll_cost(item.rarity, len(locked))} shards (you have {shards})")
+    embed.set_footer(text=f"Pity {pity}/{PITY_THRESHOLD}: after {PITY_THRESHOLD} rerolls without a T4 or T5 line, "
+                     "the next reroll is guaranteed one.")
+    return embed
+
+
+def salvage_confirm_embed(items: list[Item]) -> discord.Embed:
+    total = sum(salvage_value(i) for i in items)
+    shown = [item_line(i) for i in items[:10]]
+    if len(items) > 10:
+        shown.append(f"... and {len(items) - 10} more")
+    embed = discord.Embed(
+        title=f"Salvage {len(items)} item{'s' if len(items) != 1 else ''}?",
+        description=f"They are destroyed for good and give **{total} shards**.")
+    embed.add_field(name="Items", value="\n".join(shown), inline=False)
+    return embed
+
+
+def salvage_result_embed(count: int, shards: int, total_shards: int) -> discord.Embed:
+    return discord.Embed(
+        title="Salvaged",
+        description=f"Destroyed {count} item{'s' if count != 1 else ''} for **{shards} shards**. "
+                    f"You now have {total_shards} shards.")

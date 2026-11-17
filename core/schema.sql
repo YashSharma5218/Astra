@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS expeditions (
 );
 -- "ready" is not stored: a running expedition is ready once ends_at has passed.
 CREATE INDEX IF NOT EXISTS idx_expeditions_user ON expeditions(user_id, state);
+-- A player can have only one unclaimed expedition (running or ready) at a time. The database
+-- enforces this, so two /scavenge commands sent at the same moment cannot both start a run.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_expedition_one_running ON expeditions(user_id) WHERE state = 'running';
 
 CREATE TABLE IF NOT EXISTS duels (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
