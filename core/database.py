@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import pathlib
+import sqlite3
 from contextlib import asynccontextmanager
 
 import aiosqlite
@@ -114,7 +115,29 @@ class Database:
         await self.conn.execute("UPDATE items SET affix_json = ? WHERE id = ?",
                                 (item.affix_json(), item.id))
 
+    async def delete_item(self, item_id: int, owner_id: int) -> bool:
+        """Delete an item the player owns. False if it was already gone. Equipped items must be
+        checked by the caller first (see equipped_item_ids), because loadouts point at them."""
+        cur = await self.conn.execute("DELETE FROM items WHERE id = ? AND owner_id = ?", (item_id, owner_id))
+        return cur.rowcount == 1
+
+    async def spend_shards(self, user_id: int, amount: int) -> bool:
+        """Take shards if the player has enough. False (and nothing changes) otherwise."""
+        cur = await self.conn.execute(
+            "UPDATE players SET shards = shards - ? WHERE user_id = ? AND shards >= ?",
+            (amount, user_id, amount))
+        return cur.rowcount == 1
+
+    async def set_pity(self, user_id: int, pity: int) -> None:
+        await self.conn.execute("UPDATE players SET pity = ? WHERE user_id = ?", (pity, user_id))
+
     # ---- loadouts ----
+    async def equipped_item_ids(self, user_id: int) -> set[int]:
+        """Ids of every item the player has in any of their presets."""
+        cols = ", ".join(EQUIP_COLUMNS[slot] for slot in SLOTS)
+        cur = await self.conn.execute(f"SELECT {cols} FROM loadouts WHERE user_id = ?", (user_id,))
+        return {v for row in await cur.fetchall() for v in tuple(row) if v}
+
     async def set_loadout(self, user_id: int, preset: int, item_ids: dict[str, int | None] | None = None,
                           disposition: str = "balanced") -> None:
         """Replace a whole preset. `item_ids` maps slot -> item id; missing slots become empty."""
@@ -176,6 +199,40 @@ class Database:
             item_id = lo[EQUIP_COLUMNS[slot]] if lo else None
             gear[slot] = await self.get_item(item_id) if item_id else None
         return gear
+
+    # ---- expeditions ----
+    async def start_expedition(self, user_id: int, zone: str, started_at: int, ends_at: int,
+                               seed: int, haul_json: str) -> int | None:
+        """Start a run. Returns its id, or None if the player already has an unclaimed one."""
+        try:
+            cur = await self.conn.execute(
+                "INSERT INTO expeditions (user_id, zone, started_at, ends_at, seed, haul_json) "
+                "VALUES (?, ?, ?, ?, ?, ?)", (user_id, zone, started_at, ends_at, seed, haul_json))
+        except sqlite3.IntegrityError:
+            return None
+        return cur.lastrowid
+
+    async def expedition_starts_since(self, user_id: int, since: int) -> list[int]:
+        """Start times (oldest first) of all the player's expeditions that started after `since`,
+        whatever happened to them. Used for the runs-per-day limit."""
+        cur = await self.conn.execute(
+            "SELECT started_at FROM expeditions WHERE user_id = ? AND started_at > ? ORDER BY started_at",
+            (user_id, since))
+        return [r[0] for r in await cur.fetchall()]
+
+    async def get_running_expedition(self, user_id: int):
+        """The player's unclaimed expedition (running or ready), or None."""
+        cur = await self.conn.execute(
+            "SELECT * FROM expeditions WHERE user_id = ? AND state = 'running'", (user_id,))
+        return await cur.fetchone()
+
+    async def finish_expedition(self, expedition_id: int, state: str) -> bool:
+        """Mark a running expedition 'claimed' or 'lost'. False if it was already finished,
+        which is what stops a double click from paying out twice."""
+        cur = await self.conn.execute(
+            "UPDATE expeditions SET state = ? WHERE id = ? AND state = 'running'",
+            (state, expedition_id))
+        return cur.rowcount == 1
 
     # ---- levels ----
     async def set_level(self, user_id: int, level: int, xp: int = 0) -> None:
