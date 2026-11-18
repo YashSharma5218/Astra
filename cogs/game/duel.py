@@ -8,10 +8,11 @@ from discord.ext import commands
 
 from cogs.game._common import require_player
 from game.combat import Move
+from game.economy import DUEL_XP_PER_DAY, DUEL_XP_WINDOW, duel_xp
 from game.items import build_fighter
 from game.live_duel import LiveDuel, Submit
 from game.stats import duel_levels
-from ui.embeds import challenge_embed, duel_final_embed, duel_round_embed
+from ui.embeds import challenge_embed, duel_final_embed, duel_round_embed, xp_line
 
 ACTIVE_PRESET = 1
 ROUND_SECONDS = 45          # time to lock in a move; tune in playtests
@@ -135,11 +136,20 @@ class DuelRunner:
         live, db = self.live, self.bot.db
         a, b = live.ids
         winner_id = live.winner_id()
-        saved, record_line = True, None
+        saved, record_line, xp_lines = True, None, []
         try:
             async with db.transaction():
                 await db.add_duel("live", a, b, winner_id, live.duel.round,
                                   live.duel.seed, live.log_json())
+                # XP goes to both players in the same transaction as the saved result. Only the
+                # first DUEL_XP_PER_DAY duels in any rolling 24 hours count (this one is included).
+                since = int(time.time()) - DUEL_XP_WINDOW
+                for uid in (a, b):
+                    if await db.duels_since(uid, since) > DUEL_XP_PER_DAY:
+                        xp_lines.append(f"{live.name_of(uid)}: daily duel XP limit reached")
+                        continue
+                    gain = duel_xp(winner_id == uid)
+                    xp_lines.append(f"{live.name_of(uid)}: " + xp_line(gain, await db.grant_xp(uid, gain)))
             wins, losses, draws = await db.duel_record(a, opponent_id=b)
             record_line = f"{live.name_of(a)} {wins} - {losses} {live.name_of(b)}"
             if draws:
@@ -147,7 +157,7 @@ class DuelRunner:
         except Exception:
             saved = False                       # still show the result to the players
             traceback.print_exc()
-        await self.edit(embed=duel_final_embed(live, winner_id, record_line, saved), view=None)
+        await self.edit(embed=duel_final_embed(live, winner_id, record_line, saved, xp_lines), view=None)
 
 
 class Duel(commands.Cog):

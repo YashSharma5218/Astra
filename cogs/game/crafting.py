@@ -5,34 +5,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from cogs.game._common import require_player
+from cogs.game._common import OwnerView, choose_items, require_player
 from game.crafting import CraftingError, check_locks, reroll_affixes, reroll_cost, salvage_value
 from ui.embeds import reroll_embed, salvage_confirm_embed, salvage_result_embed
-
-VIEW_SECONDS = 180      # buttons stop working after this; run the command again
-
-
-class OwnerView(discord.ui.View):
-    """Shared by the crafting screens: only the player who ran the command can press the buttons."""
-
-    def __init__(self, bot, interaction: discord.Interaction):
-        super().__init__(timeout=VIEW_SECONDS)
-        self.bot = bot
-        self.interaction = interaction              # the original command, edited when the buttons expire
-        self.user_id = interaction.user.id
-        self.busy = False                           # a second click while the first runs is ignored
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id == self.user_id:
-            return True
-        await interaction.response.send_message("This is not your screen.", ephemeral=True)
-        return False
-
-    async def on_timeout(self):
-        try:
-            await self.interaction.edit_original_response(view=None)
-        except discord.HTTPException:
-            pass
 
 
 class RerollView(OwnerView):
@@ -181,30 +156,12 @@ class Crafting(commands.Cog):
                            rarity="Or every item of this rarity that you have not equipped")
     async def salvage(self, interaction: discord.Interaction, code: Optional[str] = None,
                       rarity: Optional[Literal["common", "rare", "epic"]] = None):
-        db, uid = self.bot.db, interaction.user.id
+        db = self.bot.db
         if await require_player(interaction, db) is None:
             return
-        if (code is None) == (rarity is None):
-            await interaction.response.send_message(
-                "Give either a code (like H12) or a rarity, not both and not neither.", ephemeral=True)
+        items = await choose_items(interaction, db, code, rarity, "salvage")
+        if items is None:
             return
-        equipped = await db.equipped_item_ids(uid)
-        if code is not None:
-            item = await db.get_item_by_uid(code)
-            if item is None or item.owner_id != uid:
-                await interaction.response.send_message("You do not own an item with that code.", ephemeral=True)
-                return
-            if item.id in equipped:
-                await interaction.response.send_message(
-                    f"{item.uid} is equipped. Equip something else in its place first.", ephemeral=True)
-                return
-            items = [item]
-        else:
-            items = [i for i in await db.list_items(uid) if i.rarity == rarity and i.id not in equipped]
-            if not items:
-                await interaction.response.send_message(
-                    f"You have no unequipped {rarity} items to salvage.", ephemeral=True)
-                return
         view = SalvageView(self.bot, interaction, items)
         await interaction.response.send_message(embed=salvage_confirm_embed(items), view=view)
 

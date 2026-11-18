@@ -35,9 +35,20 @@ def base_stats(level: int) -> dict:
     return stats
 
 
+# XP curve, shaped like Hypixel SkyBlock's skills: each level costs more than the last by a growing
+# percentage at first, then by a fixed amount. Placeholder numbers, stingy on purpose.
+XP_BASE = 150            # XP to go from level 1 to level 2
+XP_GROWTH = 1.2          # each level up to XP_LINEAR_FROM costs 20% more than the one before
+XP_LINEAR_FROM = 15      # from this level on, each level costs XP_STEP more than the previous one
+XP_STEP = 300
+
+
 def xp_to_next(level: int) -> int:
-    """XP needed to go from `level` to the next one. Placeholder curve: 100 x level."""
-    return 100 * max(MIN_LEVEL, int(level))
+    """XP needed to go from `level` to the next one: exponential up to level 15, then linear."""
+    level = max(MIN_LEVEL, int(level))
+    if level <= XP_LINEAR_FROM:
+        return round(XP_BASE * XP_GROWTH ** (level - 1))
+    return round(XP_BASE * XP_GROWTH ** (XP_LINEAR_FROM - 1)) + XP_STEP * (level - XP_LINEAR_FROM)
 
 
 def duel_levels(level_a: int, level_b: int, real_levels: bool = False) -> tuple[int, int]:

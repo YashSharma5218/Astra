@@ -4,3 +4,5 @@ import os
 TOKEN = os.getenv("TOKEN")
 PREFIX = "!"
 DB_PATH = os.getenv("DB_PATH", "data/game.db")
+BACKUP_DIR = os.getenv("BACKUP_DIR", "backups")
+BACKUP_KEEP = int(os.getenv("BACKUP_KEEP", "7"))      # how many daily backups to keep

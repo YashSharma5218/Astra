@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 
 import aiosqlite
 
+from game.economy import add_xp
 from game.items import SLOTS, Item, make_uid, normalize_uid
 
 SCHEMA_PATH = pathlib.Path(__file__).with_name("schema.sql")
@@ -58,6 +59,12 @@ class Database:
                 raise
             else:
                 await self.conn.execute("COMMIT")
+
+    async def backup_to(self, path: str) -> None:
+        """Write a consistent copy of the whole database to `path` (which must not exist yet).
+        Waits for any running transaction, so the copy never holds half of one."""
+        async with self._lock:
+            await self.conn.execute("VACUUM INTO ?", (path,))
 
     # ---- players ----
     async def ensure_player(self, user_id: int):
@@ -119,6 +126,12 @@ class Database:
         """Delete an item the player owns. False if it was already gone. Equipped items must be
         checked by the caller first (see equipped_item_ids), because loadouts point at them."""
         cur = await self.conn.execute("DELETE FROM items WHERE id = ? AND owner_id = ?", (item_id, owner_id))
+        return cur.rowcount == 1
+
+    async def spend_gold(self, user_id: int, amount: int) -> bool:
+        """Take gold if the player has enough. False (and nothing changes) otherwise."""
+        cur = await self.conn.execute(
+            "UPDATE players SET gold = gold - ? WHERE user_id = ? AND gold >= ?", (amount, user_id, amount))
         return cur.rowcount == 1
 
     async def spend_shards(self, user_id: int, amount: int) -> bool:
@@ -235,6 +248,21 @@ class Database:
         return cur.rowcount == 1
 
     # ---- levels ----
+    async def grant_xp(self, user_id: int, amount: int) -> tuple[int, int, int]:
+        """Give XP and level up. Returns (new level, XP towards the next level, levels gained).
+        Call it inside a transaction."""
+        player = await self.get_player(user_id)
+        level, xp, gained = add_xp(player["level"], player["xp"], amount)
+        await self.set_level(user_id, level, xp)
+        return level, xp, gained
+
+    async def duels_since(self, user_id: int, since: int) -> int:
+        """How many saved duels the player took part in after `since` (Unix seconds)."""
+        cur = await self.conn.execute(
+            "SELECT COUNT(*) FROM duels WHERE (player_a = ? OR player_b = ?) AND created_at > ?",
+            (user_id, user_id, since))
+        return (await cur.fetchone())[0]
+
     async def set_level(self, user_id: int, level: int, xp: int = 0) -> None:
         await self.conn.execute("UPDATE players SET level = ?, xp = ? WHERE user_id = ?",
                                 (level, xp, user_id))

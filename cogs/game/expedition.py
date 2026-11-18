@@ -6,9 +6,10 @@ from discord import app_commands
 from discord.ext import commands
 
 from cogs.game._common import require_player
+from game.economy import XP_EXPEDITION, XP_PUSH_BONUS
 from game.loot import (DEFAULT_ZONE, MAX_RUNS, RUN_WINDOW, ZONES, Haul, build_item,
                        next_run_at, roll_haul, roll_push)
-from ui.embeds import (expedition_result_embed, expedition_started_embed,
+from ui.embeds import (expedition_result_embed, expedition_started_embed, xp_line,
                        expedition_waiting_embed, haul_embed)
 
 CLAIM_VIEW_SECONDS = 300      # buttons stop working after this; run /scavenge again (the haul stays the same)
@@ -54,17 +55,18 @@ class ClaimView(discord.ui.View):
         except discord.HTTPException:
             pass
 
-    async def finish(self, interaction: discord.Interaction, state: str, haul: Haul | None):
-        """Settle the expedition in one transaction. Returns (ok, saved items)."""
+    async def finish(self, interaction: discord.Interaction, state: str, haul: Haul | None, xp: int = 0):
+        """Settle the expedition in one transaction. Returns (ok, saved items, XP result or None)."""
         db = self.bot.db
         try:
             async with db.transaction():
                 ok = await db.finish_expedition(self.expedition_id, state)
                 items = await pay_out(db, self.user_id, haul) if ok and haul else []
+                gained = await db.grant_xp(self.user_id, xp) if ok and xp else None
         except BaseException:
             self.used = False          # nothing was saved (the transaction rolled back), so let them try again
             raise
-        return ok, items
+        return ok, items, gained
 
     @discord.ui.button(label="Bank & Leave", style=discord.ButtonStyle.success)
     async def bank(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -72,14 +74,14 @@ class ClaimView(discord.ui.View):
             await interaction.response.send_message("You already made your choice.", ephemeral=True)
             return
         self.used = True
-        ok, items = await self.finish(interaction, "claimed", self.haul)
+        ok, items, gained = await self.finish(interaction, "claimed", self.haul, XP_EXPEDITION)
         if not ok:
             await interaction.response.send_message("This expedition was already claimed.", ephemeral=True)
             return
         self.stop()
         await interaction.response.edit_message(
             embed=expedition_result_embed("Banked", "You took the haul and headed home.",
-                                          self.haul, items), view=None)
+                                          self.haul, items, xp_line(XP_EXPEDITION, gained)), view=None)
 
     @discord.ui.button(label="Push Deeper", style=discord.ButtonStyle.danger)
     async def push(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -88,14 +90,17 @@ class ClaimView(discord.ui.View):
             return
         self.used = True
         result = roll_push(self.seed, self.zone, self.haul)
-        ok, items = await self.finish(interaction, "claimed" if result.success else "lost", result.haul)
+        xp = XP_EXPEDITION + XP_PUSH_BONUS if result.success else 0
+        ok, items, gained = await self.finish(
+            interaction, "claimed" if result.success else "lost", result.haul, xp)
         if not ok:
             await interaction.response.send_message("This expedition was already claimed.", ephemeral=True)
             return
         self.stop()
         if result.success:
             embed = expedition_result_embed(
-                "Push Deeper: success!", "You went deeper and came back with more.", result.haul, items)
+                "Push Deeper: success!", "You went deeper and came back with more.", result.haul, items,
+                xp_line(xp, gained))
         else:
             embed = expedition_result_embed(
                 "Push Deeper: lost", "The way collapsed behind you and the whole haul was lost.")
