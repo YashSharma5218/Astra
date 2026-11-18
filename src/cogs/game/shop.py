@@ -4,10 +4,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from cogs.game._common import OwnerView, choose_items, require_player
-from game.economy import sell_value, shop_price
-from game.items import generate_item
-from ui.embeds import item_line, sell_confirm_embed, sell_result_embed, shop_embed
+from src.cogs.game._common import OwnerView, choose_items, require_player
+from src.game.economy import sell_value, shop_price
+from src.game.items import generate_item
+from src.ui.embeds import item_line, sell_confirm_embed, sell_result_embed, shop_embed
 
 
 class SellView(OwnerView):

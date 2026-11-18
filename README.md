@@ -1,82 +1,134 @@
 # Astra
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+A Discord bot game about gear, expeditions and duels. Build a fighter from rerollable equipment, send it out to scavenge for loot, and challenge other players to hidden-move duels.
 
-A micro-ARPG Discord battler built for small groups. Collect gear from timed expeditions, customize your build by rerolling affixes, and outsmart your friends in live, simultaneous-turn duels.
+Built with [discord.py](https://discordpy.readthedocs.io/) and SQLite. Astra is in active development, so numbers and features change often.
 
-## Core Gameplay Loop
+## Features
 
-1. **Expeditions (`/scavenge`):** Launch 30-minute runs to gather gold, reroll shards, and gear. When a run finishes, choose to **Bank & Leave** safely or **Push Deeper** for higher-tier rewards at the risk of losing the haul.
-2. **Crafting & Builds (`/reroll`, `/salvage`):** Tune your weapon and four armor slots (helmet, chestplate, leggings, boots). Lock desirable affixes to sculpt builds around Crit, Lifesteal, Dodge, Thorns, or elemental counters.
-3. **Live Duels (`/duel`):** Challenge friends to simultaneous 3-to-5-round battles. Pick **Attack**, **Guard**, or **Skill** in secret each round—Attack interrupts Skill, Skill pierces Guard, and Guard blocks and counters Attack.
+- **Gear with rolled affixes.** Five slots: weapon, helmet, chestplate, leggings and boots. Items come in Common, Rare and Epic, and each has affix lines (crit chance, crit damage, armor penetration, lifesteal, thorns, dodge, strength) rolled at a tier from T1 to T5. Every item has a short code, such as `H12`, that you use to equip or craft it.
+- **Hidden-move duels.** Both players secretly pick Attack, Guard or Skill each round, then the moves are revealed together. Attack beats Skill, Skill beats Guard, and Guard beats Attack, with a counter-hit for a well-timed Guard. Your weapon decides your Skill, and Skill costs mana.
+- **Timed expeditions.** Send your fighter out, close Discord, and come back to collect. When it returns you can bank the haul or push deeper for more at the risk of losing everything. Expeditions keep counting while the bot is offline.
+- **Crafting.** Salvage items into Reroll Shards, then spend shards to reroll an item's affixes. Lock the lines you like to keep them, at a higher cost, and a pity counter guarantees a good roll after enough bad ones.
+- **Economy and levels.** Earn gold and XP from expeditions and duels, buy gear from the shop, and sell what you don't need. Levels add to your base stats, and duels are fought at the average of both players' levels unless you choose real levels.
+- **Daily backups.** The database is backed up once a day and the newest copies are kept.
 
-## Project Structure
+## Commands
 
-```text
-Astra/
-├── .env                  # Environment variables (TOKEN, DB_PATH)
-├── .gitignore
-├── backups/              # Automated daily SQLite snapshots
-├── cogs/                 # Discord slash commands and admin utilities
-├── config.py             # Configuration constants
-├── core/                 # Async SQLite connection, schema, and backups
-├── data/                 # Runtime SQLite database (game.db)
-├── docs/                 # Game design specs and technical architecture
-├── game/                 # Pure Python combat, loot, crafting, and economy rules
-├── LICENSE               # GNU Affero General Public License v3.0
-├── main.py               # Bot entry point and cog loader
-├── README.md
-├── requirements.txt
-└── ui/                   # Discord embeds and interactive button views
-```
+| Command | What it does |
+| --- | --- |
+| `/start` | Create your fighter and get your first set of gear |
+| `/profile` | Show your level, gear, stats and duel record |
+| `/inventory` | List your items, optionally filtered by slot |
+| `/equip code` | Equip an item by its code |
+| `/duel @player` | Challenge a player to a live duel |
+| `/scavenge` | Start an expedition, check on it, or collect it when it is back |
+| `/reroll code` | Reroll an item's affix lines, with lock buttons |
+| `/salvage` | Break an item, or every unequipped item of a rarity, into Reroll Shards |
+| `/shop` | See the shop's prices and what selling pays |
+| `/buy slot rarity` | Buy a random item of the slot and rarity you choose |
+| `/sell` | Sell an item, or every unequipped item of a rarity, for gold |
 
-## Getting Started
+Owner-only text commands (the account that owns the bot application):
 
-### 1. Clone the Repository
+| Command | What it does |
+| --- | --- |
+| `!sync` | Publish the slash commands to Discord. Run it after adding or changing commands |
+| `!setlevel @user level` | Set a player's level, for testing |
+| `!backup` | Make a database backup right now |
+
+## Getting started
+
+### Requirements
+
+- Python 3.10 or newer
+- A Discord bot application and its token
+
+### Create the bot
+
+1. Create an application in the [Discord Developer Portal](https://discord.com/developers/applications) and add a bot to it.
+2. Under **Bot**, turn on the **Message Content Intent**. It is needed for the `!` owner commands.
+3. Invite the bot to your server with the `bot` and `applications.commands` scopes.
+
+### Install
 
 ```bash
 git clone https://github.com/YashSharma5218/Astra.git
 cd Astra
-```
-
-### 2. Prerequisites & Installation
-
-Ensure you have Python 3.10+ installed, then set up a virtual environment and install dependencies:
-
-```bash
 python -m venv .venv
-# Activate your virtual environment, then run:
-pip install -r requirements.txt
+source .venv/bin/activate      # on Windows: .venv\Scripts\activate
+pip install discord.py aiosqlite
 ```
 
-### 3. Configuration
+### Configure
 
-Create a `.env` file in the root directory and add your Discord bot token:
+The bot reads its settings from environment variables:
 
-```env
-TOKEN=your_discord_bot_token_here
-```
+| Variable | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `TOKEN` | yes | none | Your bot token. Never commit it |
+| `DB_PATH` | no | `data/game.db` | Where the SQLite database is stored |
+| `BACKUP_DIR` | no | `backups` | Where daily backups are written |
+| `BACKUP_KEEP` | no | `7` | How many daily backups to keep |
 
-### 4. Running the Bot
-
-Run the bot from the root `Astra/` directory:
+For example, on Linux or macOS:
 
 ```bash
-python main.py
+export TOKEN="your-bot-token"
 ```
 
-Once the bot is online in your server, run `!sync` (bot owner only) to register the slash commands, then use `/start` to create your fighter profile.
+On Windows PowerShell:
 
-## Design & Technical Documentation
+```powershell
+$env:TOKEN = "your-bot-token"
+```
 
-Detailed mechanics, math formulas, and implementation notes live in the `docs/` folder:
+### Run
 
-* [**How the Game Works**](docs/Micro-ARPG%20Discord%20Battler%20How%20the%20Game%20Works.md) — High-level overview of the gameplay loop, elemental counters, and fairness mechanics.
-* [**Combat Spec**](docs/Combat%20Spec%20\(Draft%20v1,%20tuned%20in%20simulation\).md) — Round interactions, Guard counters, damage resolution order, stat caps, and simulation tuning results.
-* [**Gear & Affixes Spec**](docs/Gear%20&%20Affixes%20Spec.md) — Equipment slots, rarity scaling, T1–T5 affix values, reroll locking costs, and pity rules.
-* [**Economy & Expeditions Spec**](docs/Economy%20&%20Expeditions%20Spec.md) — Currencies, `/scavenge` risk/reward tables, XP curves, and shop pricing.
-* [**Technical Plan**](docs/Technical%20Plan.md) — Architecture map, database schema overview, state management, and build status.
+From the project root:
+
+```bash
+python -m src.main
+```
+
+The first time, run `!sync` in your server (as the bot owner) and wait a minute for the slash commands to appear. Then use `/start` to create your fighter.
+
+The database and the `backups/` folder are created automatically. Add `data/` and `backups/` to your `.gitignore` so they are never pushed.
+
+## Terminal playtest
+
+The duel engine has no Discord code in it, so you can try it in the terminal:
+
+```bash
+python -m src.play_cli              # play a duel against a bot
+python -m src.play_cli --sim 5000   # bot vs bot, prints win rates
+```
+
+## Project structure
+
+All code lives in the `src` package, and imports are counted from the project root (for example `from src.game.items import ...`).
+
+```text
+src/
+├── main.py        # starts the bot, opens the database, loads every cog
+├── config.py      # settings read from environment variables
+├── play_cli.py    # terminal playtest and simulation
+├── core/          # database access, schema and backups
+├── game/          # the rules: combat, items, loot, crafting, economy. Pure Python, no discord imports
+├── ui/            # the embeds shown to players
+└── cogs/          # the Discord commands, kept thin: they call into game/ and core/
+    ├── game/      # /start, /profile, /inventory, /equip, /duel, /scavenge, /reroll, /salvage, /shop, /buy, /sell
+    └── misc/      # owner commands and the backup task
+```
+
+The rules in `src/game/` never touch Discord or the database, so they can be tested and tuned on their own.
+
+## Notes
+
+- All database writes happen inside transactions, so a crash or a double click cannot duplicate or lose items or currency.
+- While the game is still taking shape, a change to the database tables may require deleting `data/game.db` once. Delete it only on a test server, because it removes all progress.
+- To restore a backup, stop the bot and copy a file from `backups/` over `data/game.db`.
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)** — see the [LICENSE](LICENSE) file for details.
+Astra is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0). If you modify Astra and run it as a service that other people use over a network, such as a public Discord bot, you must make the source code of your modified version available to those users under the same license.

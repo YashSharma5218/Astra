@@ -14,8 +14,8 @@ from contextlib import asynccontextmanager
 
 import aiosqlite
 
-from game.economy import add_xp
-from game.items import SLOTS, Item, make_uid, normalize_uid
+from src.game.economy import add_xp
+from src.game.items import SLOTS, Item, make_uid, normalize_uid
 
 SCHEMA_PATH = pathlib.Path(__file__).with_name("schema.sql")
 EQUIP_COLUMNS = {slot: f"{slot}_id" for slot in SLOTS}     # whitelist of loadout columns

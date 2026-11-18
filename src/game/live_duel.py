@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from enum import Enum
 
-from game.combat import Duel, Fighter, Move, RoundResult
+from src.game.combat import Duel, Fighter, Move, RoundResult
 
 MISSED_ROUNDS_TO_FORFEIT = 2     # missing this many rounds in a row forfeits the duel
 

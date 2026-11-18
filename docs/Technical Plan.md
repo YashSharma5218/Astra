@@ -25,7 +25,7 @@ Updated 2026-11-16. The code is written and tested with stand-in objects, since 
 
 1. Install the packages: `pip install discord.py aiosqlite`, and add both to `requirements.txt`.
 2. Set the `TOKEN` environment variable as before. `DB_PATH` is optional and defaults to `data/game.db`.
-3. Start the bot with `python main.py`.
+3. Start the bot from the project root with `python -m src.main`.
 4. In your server, run `!sync` once (bot owner only), then wait a minute for the slash commands to appear.
 5. Run `/start`, then `/profile`, `/inventory` and `/equip`.
 
@@ -37,51 +37,51 @@ Use `aiosqlite` so database calls do not block the event loop, and attach the co
 
 ## File map
 
-The tree shows every file and where it lives, starting from the project root (the folder that holds `main.py`). A comment says what each file does, and `planned` marks files that are not written yet. It is updated whenever a file is added or changes purpose.
+The tree shows every file and where it lives, starting from the project root. All the code is inside `src/`, which keeps it apart from `data/`, `backups/` and the project files. A comment says what each file does, and `planned` marks files that are not written yet. It is updated whenever a file is added or changes purpose.
 
 ```text
-project/                   # the folder that holds main.py
-├── main.py                # starts the bot, opens the database, loads every cog
-├── config.py              # TOKEN, PREFIX, DB_PATH, BACKUP_DIR, BACKUP_KEEP
-├── play_cli.py            # terminal playtest and bot-vs-bot simulation
-├── requirements.txt       # yours: add discord.py and aiosqlite
-├── .gitignore             # yours: add data/ and backups/
-├── README.md              # yours
+project/                    # the project root
+├── README.md               # yours
+├── requirements.txt        # yours: discord.py and aiosqlite
+├── .gitignore              # yours: add data/ and backups/
 ├── data/
-│   └── game.db            # made by the bot on first start, not pushed to git
-├── core/                  # database access
-│   ├── __init__.py
-│   ├── database.py        # connection, transactions, players, items, loadouts, duels
-│   └── schema.sql         # table definitions, run every time the bot starts
-│   ├── backup.py          # daily database snapshot and pruning of old ones
-├── game/                  # the rules: pure Python, never imports discord
-│   ├── __init__.py
-│   ├── combat.py          # duel engine: moves, mana, damage order, Guard counter, caps, async policy
-│   ├── items.py           # five gear slots, affix tiers, item codes, gear + level into a fighter
-│   ├── live_duel.py       # one live duel: locked moves, timeouts, forfeits, winner
-│   ├── stats.py           # level 1 base stats, per-level growth, duel level rules
-│   ├── loot.py            # expedition rules: zones, seeded haul, Push Deeper
-│   ├── crafting.py       # salvage values, reroll cost, locks, pity
-│   ├── economy.py        # shop and sell prices, XP amounts, level-up rule
-│   └── balance_sim.py     # planned: the 10,000-duel balance script
-├── ui/                    # embeds shown to players
-│   ├── __init__.py
-│   └── embeds.py          # profile, inventory, challenge, round and result embeds
-├── cogs/                  # the Discord commands: thin, they call into game/ and core/
-│   ├── misc/
-│   │   ├── test.py        # yours: !test
-│   │   ├── backup.py      # daily backup loop, owner-only !backup
-│   │   └── admin.py       # owner-only !sync and !setlevel
-│   └── game/              # not the same folder as the top-level game/
-│       ├── _common.py     # shared "use /start first" check, skipped by the loader
-│       ├── profile.py     # /start (weapon + four armor pieces), /profile (level, gear, stats)
-│       ├── inventory.py   # /inventory, /equip
-│       ├── duel.py        # /duel (with real_levels option): challenge, hidden-move buttons, round loop, saved result
-│       ├── expedition.py  # /scavenge: start, check and collect (Bank & Leave, Push Deeper buttons)
-│       ├── crafting.py    # /reroll (lock buttons, pity), /salvage (one item or a whole rarity)
-│       └── shop.py        # /shop, /buy, /sell
-├── static/                # planned: game content as JSON, if it stops fitting in code
-└── backups/               # made by the bot: one copy of data/game.db a day, newest 7 kept
+│   └── game.db             # made by the bot on first start, not pushed to git
+├── backups/                # made by the bot: one copy of game.db a day, newest 7 kept
+└── src/                    # all the code, a package; start the bot with: python -m src.main
+    ├── main.py             # starts the bot, opens the database, loads every cog
+    ├── config.py           # TOKEN, PREFIX, DB_PATH, BACKUP_DIR, BACKUP_KEEP
+    ├── play_cli.py         # terminal playtest and bot-vs-bot simulation
+    ├── core/               # database access
+    │   ├── __init__.py
+    │   ├── database.py     # connection, transactions, players, items, loadouts, duels
+    │   ├── backup.py       # daily database snapshot and pruning of old ones
+    │   └── schema.sql      # table definitions, run every time the bot starts
+    ├── game/               # the rules: pure Python, never imports discord
+    │   ├── __init__.py
+    │   ├── combat.py       # duel engine: moves, mana, damage order, Guard counter, caps
+    │   ├── items.py        # five gear slots, affix tiers, item codes, gear + level into a fighter
+    │   ├── live_duel.py    # one live duel: locked moves, timeouts, forfeits, winner
+    │   ├── stats.py        # base stats, per-level growth, XP curve, duel level rules
+    │   ├── loot.py         # expedition rules: zones, seeded haul, Push Deeper, run limit
+    │   ├── crafting.py     # salvage values, reroll cost, locks, pity
+    │   ├── economy.py      # shop and sell prices, XP amounts, level-up rule
+    │   └── balance_sim.py  # planned: the 10,000-duel balance script
+    ├── ui/                 # embeds shown to players
+    │   ├── __init__.py
+    │   └── embeds.py       # profile, inventory, duel, expedition, crafting and shop embeds
+    └── cogs/               # the Discord commands: thin, they call into game/ and core/
+        ├── misc/
+        │   ├── test.py     # yours: !test
+        │   ├── admin.py    # owner-only !sync and !setlevel
+        │   └── backup.py   # daily backup loop, owner-only !backup
+        └── game/           # not the same folder as src/game/
+            ├── _common.py  # shared checks and screen base class, skipped by the loader
+            ├── profile.py  # /start, /profile
+            ├── inventory.py # /inventory, /equip
+            ├── duel.py     # /duel with hidden-move buttons
+            ├── expedition.py # /scavenge: start, check and collect
+            ├── crafting.py # /reroll, /salvage
+            └── shop.py     # /shop, /buy, /sell
 ```
 
 ## Database
@@ -139,6 +139,7 @@ The Bank & Leave and Push Deeper buttons do not need to survive a restart: a `/s
 ## Other decisions
 
 - The answer timer starts at 45 seconds and is tuned in playtests.
+- Code layout (2026-11-18): `src/` is a Python package and every import is counted from the project root, such as `from src.game.items import ...` (the repository root is the editor workspace). Start the bot with `python -m src.main` from the root; `python src/main.py` and an editor run button also work, because `main.py` puts the project root on the import path. Cogs are loaded as `src.cogs...`, and the terminal playtest runs with `python -m src.play_cli`. `config.py` builds the default `DB_PATH` and `BACKUP_DIR` from the project root, so `data/` and `backups/` stay at the root wherever the bot is started from. `src/`, `src/cogs/`, `src/cogs/game/` and `src/cogs/misc/` each have an empty `__init__.py`, and the cog loader skips them because their names start with an underscore.
 - Async duels were dropped (2026-11-18): not practical and not worth the work, so duels are live only. The disposition column, the async move policy in game/combat.py and the duels mode value async stay in the code unused; the terminal playtest still uses the policy for its bot opponent.
 - Expeditions: a player can have only one unclaimed run (running or ready), enforced by a partial unique index in the database. The haul is rolled from the stored seed when /scavenge runs and saved in `haul_json`; Push Deeper is also decided by that seed, so retrying or restarting changes nothing. Banking or losing flips the state from running inside one transaction, so a double click or a stale button cannot pay twice. The collect buttons last 5 minutes and are rebuilt by running /scavenge again. A finished run never expires.
 - Number scale (decided: hundreds): defense is in points, and `defense_to_reduction` in `game/stats.py` turns it into damage reduction with defense / (defense + 500). The full per-piece values are in the Gear & Affixes Spec. A fighter without a weapon hits for 20.

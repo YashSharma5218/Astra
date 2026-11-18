@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import discord
 
-from game.combat import MAX_ROUNDS, Fighter, format_round
-from game.crafting import LOCK_COST_MULT, reroll_cost, salvage_value
-from game.economy import SELL_GOLD, SHOP_PRICE, sell_value
-from game.items import PITY_THRESHOLD, SLOTS, Item
-from game.live_duel import LiveDuel
-from game.loot import MAX_RUNS, PUSH_CHANCE, Haul, Zone, build_item
-from game.stats import xp_to_next
+from src.game.combat import MAX_ROUNDS, Fighter, format_round
+from src.game.crafting import LOCK_COST_MULT, reroll_cost, salvage_value
+from src.game.economy import SELL_GOLD, SHOP_PRICE, sell_value
+from src.game.items import PITY_THRESHOLD, SLOTS, Item
+from src.game.live_duel import LiveDuel
+from src.game.loot import MAX_RUNS, PUSH_CHANCE, Haul, Zone, build_item
+from src.game.stats import xp_to_next
 
 PAGE_SIZE = 8
 

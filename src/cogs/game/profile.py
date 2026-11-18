@@ -1,9 +1,9 @@
 from discord import app_commands
 from discord.ext import commands
 
-from cogs.game._common import require_player
-from game.items import SLOTS, build_fighter, generate_item
-from ui.embeds import item_line, profile_embed
+from src.cogs.game._common import require_player
+from src.game.items import SLOTS, build_fighter, generate_item
+from src.ui.embeds import item_line, profile_embed
 
 ACTIVE_PRESET = 1
 

@@ -5,8 +5,8 @@ Spec). Epic gear can never be bought: it only comes from expeditions.
 """
 from __future__ import annotations
 
-from game.items import Item
-from game.stats import xp_to_next
+from src.game.items import Item
+from src.game.stats import xp_to_next
 
 SHOP_PRICE = {"common": 500, "rare": 4000}                 # no epic: it has to be earned
 SELL_GOLD = {"common": 40, "rare": 150, "epic": 500}

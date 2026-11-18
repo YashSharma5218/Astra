@@ -6,13 +6,13 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from cogs.game._common import require_player
-from game.combat import Move
-from game.economy import DUEL_XP_PER_DAY, DUEL_XP_WINDOW, duel_xp
-from game.items import build_fighter
-from game.live_duel import LiveDuel, Submit
-from game.stats import duel_levels
-from ui.embeds import challenge_embed, duel_final_embed, duel_round_embed, xp_line
+from src.cogs.game._common import require_player
+from src.game.combat import Move
+from src.game.economy import DUEL_XP_PER_DAY, DUEL_XP_WINDOW, duel_xp
+from src.game.items import build_fighter
+from src.game.live_duel import LiveDuel, Submit
+from src.game.stats import duel_levels
+from src.ui.embeds import challenge_embed, duel_final_embed, duel_round_embed, xp_line
 
 ACTIVE_PRESET = 1
 ROUND_SECONDS = 45          # time to lock in a move; tune in playtests

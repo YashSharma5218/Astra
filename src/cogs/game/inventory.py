@@ -4,9 +4,9 @@ from typing import Literal, Optional
 from discord import app_commands
 from discord.ext import commands
 
-from cogs.game._common import require_player
-from game.items import SLOTS
-from ui.embeds import PAGE_SIZE, inventory_embed, item_line
+from src.cogs.game._common import require_player
+from src.game.items import SLOTS
+from src.ui.embeds import PAGE_SIZE, inventory_embed, item_line
 
 
 class Inventory(commands.Cog):

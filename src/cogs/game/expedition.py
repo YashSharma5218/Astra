@@ -5,11 +5,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from cogs.game._common import require_player
-from game.economy import XP_EXPEDITION, XP_PUSH_BONUS
-from game.loot import (DEFAULT_ZONE, MAX_RUNS, RUN_WINDOW, ZONES, Haul, build_item,
+from src.cogs.game._common import require_player
+from src.game.economy import XP_EXPEDITION, XP_PUSH_BONUS
+from src.game.loot import (DEFAULT_ZONE, MAX_RUNS, RUN_WINDOW, ZONES, Haul, build_item,
                        next_run_at, roll_haul, roll_push)
-from ui.embeds import (expedition_result_embed, expedition_started_embed, xp_line,
+from src.ui.embeds import (expedition_result_embed, expedition_started_embed, xp_line,
                        expedition_waiting_embed, haul_embed)
 
 CLAIM_VIEW_SECONDS = 300      # buttons stop working after this; run /scavenge again (the haul stays the same)

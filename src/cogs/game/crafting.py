@@ -5,9 +5,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from cogs.game._common import OwnerView, choose_items, require_player
-from game.crafting import CraftingError, check_locks, reroll_affixes, reroll_cost, salvage_value
-from ui.embeds import reroll_embed, salvage_confirm_embed, salvage_result_embed
+from src.cogs.game._common import OwnerView, choose_items, require_player
+from src.game.crafting import CraftingError, check_locks, reroll_affixes, reroll_cost, salvage_value
+from src.ui.embeds import reroll_embed, salvage_confirm_embed, salvage_result_embed
 
 
 class RerollView(OwnerView):

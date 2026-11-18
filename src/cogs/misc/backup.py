@@ -2,8 +2,8 @@ import traceback
 
 from discord.ext import commands, tasks
 
-from config import BACKUP_DIR, BACKUP_KEEP
-from core.backup import run_backup
+from src.config import BACKUP_DIR, BACKUP_KEEP
+from src.core.backup import run_backup
 
 
 class Backup(commands.Cog):

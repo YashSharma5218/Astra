@@ -14,7 +14,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
-from game.items import PITY_THRESHOLD, Affix, Item, roll_affix
+from src.game.items import PITY_THRESHOLD, Affix, Item, roll_affix
 
 SALVAGE_SHARDS = {"common": 8, "rare": 24, "epic": 60}
 REROLL_BASE_COST = {"common": 15, "rare": 30, "epic": 60}      # with no locks

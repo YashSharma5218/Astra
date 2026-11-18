@@ -5,8 +5,8 @@ import json
 import random
 from dataclasses import dataclass, field
 
-from game.combat import DEFAULT_SKILL_COST, DEFAULT_SKILL_MULT, Fighter
-from game.stats import base_stats, defense_to_reduction
+from src.game.combat import DEFAULT_SKILL_COST, DEFAULT_SKILL_MULT, Fighter
+from src.game.stats import base_stats, defense_to_reduction
 
 ARMOR_SLOTS = ("helmet", "chestplate", "leggings", "boots")
 SLOTS = ("weapon",) + ARMOR_SLOTS            # the weapon's ability is the Skill, so no spell slot
