@@ -1,5 +1,7 @@
 # Astra
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+
 A Discord bot game about gear, expeditions and duels. Build a fighter from rerollable equipment, send it out to scavenge for loot, and challenge other players to hidden-move duels.
 
 Built with [discord.py](https://discordpy.readthedocs.io/) and SQLite. Astra is in active development, so numbers and features change often.
