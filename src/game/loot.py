@@ -16,7 +16,7 @@ import json
 import random
 from dataclasses import dataclass, field
 
-from game.items import RARITIES, SLOTS, Item, generate_item
+from src.game.items import RARITIES, SLOTS, Item, generate_item
 
 PUSH_CHANCE = 0.55       # chance that Push Deeper succeeds
 PUSH_MULT = 2            # gold and shards are multiplied by this after a successful Push

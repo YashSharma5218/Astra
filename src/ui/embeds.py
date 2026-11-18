@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import discord
 
-from game.combat import MAX_ROUNDS, Fighter, format_round
-from game.crafting import LOCK_COST_MULT, reroll_cost, salvage_value
-from game.items import PITY_THRESHOLD, SLOTS, Item
-from game.live_duel import LiveDuel
-from game.loot import MAX_RUNS, PUSH_CHANCE, Haul, Zone, build_item
-from game.stats import xp_to_next
+from src.game.combat import MAX_ROUNDS, Fighter, format_round
+from src.game.crafting import LOCK_COST_MULT, reroll_cost, salvage_value
+from src.game.economy import SELL_GOLD, SHOP_PRICE, sell_value
+from src.game.items import PITY_THRESHOLD, SLOTS, Item
+from src.game.live_duel import LiveDuel
+from src.game.loot import MAX_RUNS, PUSH_CHANCE, Haul, Zone, build_item
+from src.game.stats import xp_to_next
 
 PAGE_SIZE = 8
 
@@ -116,7 +117,7 @@ def duel_round_embed(live: LiveDuel, deadline: int) -> discord.Embed:
 
 
 def duel_final_embed(live: LiveDuel, winner_id: int | None, record_line: str | None = None,
-                     saved: bool = True) -> discord.Embed:
+                     saved: bool = True, xp_lines: list[str] | None = None) -> discord.Embed:
     d = live.duel
     reason = live.end_reason()
     if reason == "forfeit":
@@ -130,6 +131,8 @@ def duel_final_embed(live: LiveDuel, winner_id: int | None, record_line: str | N
     for uid in live.ids:
         f = live.fighters[uid]
         embed.add_field(name=f.name, value=hp_bar(f.hp, f.max_hp), inline=True)
+    if xp_lines:
+        embed.add_field(name="Experience", value="\n".join(xp_lines), inline=False)
     footer = f"Seed {d.seed}"
     if record_line:
         footer += f"  |  {record_line}"
@@ -176,11 +179,24 @@ def haul_embed(zone: Zone, haul: Haul) -> discord.Embed:
     return embed
 
 
+def xp_line(gain: int, result: tuple[int, int, int] | None) -> str | None:
+    """'+30 XP' plus a level-up note. `result` is what db.grant_xp returned."""
+    if not gain or result is None:
+        return None
+    level, _, levels_gained = result
+    line = f"+{gain} XP"
+    if levels_gained:
+        line += f" | Level up! You are now level {level}."
+    return line
+
+
 def expedition_result_embed(title: str, text: str, haul: Haul | None = None,
-                            items: list[Item] | None = None) -> discord.Embed:
+                            items: list[Item] | None = None, xp_note: str | None = None) -> discord.Embed:
     embed = discord.Embed(title=title, description=text)
     if haul is not None:
         embed.add_field(name="Added to your account", value=haul_lines(haul, items), inline=False)
+    if xp_note:
+        embed.add_field(name="Experience", value=xp_note, inline=False)
     return embed
 
 
@@ -221,3 +237,36 @@ def salvage_result_embed(count: int, shards: int, total_shards: int) -> discord.
         title="Salvaged",
         description=f"Destroyed {count} item{'s' if count != 1 else ''} for **{shards} shards**. "
                     f"You now have {total_shards} shards.")
+
+
+# ---- shop ----
+def shop_embed(gold: int) -> discord.Embed:
+    embed = discord.Embed(
+        title="Shop",
+        description=f"You have **{gold} gold**. `/buy slot rarity` gives one random item of that slot, "
+                    "with random affixes.")
+    embed.add_field(name="For sale", value="\n".join(
+        [f"{r.title()}: {p} gold" for r, p in SHOP_PRICE.items()]
+        + ["Epic: not for sale, you have to earn it on expeditions"]), inline=False)
+    embed.add_field(name="`/sell` pays", value="\n".join(
+        f"{r.title()}: {g} gold" for r, g in SELL_GOLD.items()), inline=False)
+    return embed
+
+
+def sell_confirm_embed(items: list[Item]) -> discord.Embed:
+    total = sum(sell_value(i) for i in items)
+    shown = [item_line(i) for i in items[:10]]
+    if len(items) > 10:
+        shown.append(f"... and {len(items) - 10} more")
+    embed = discord.Embed(
+        title=f"Sell {len(items)} item{'s' if len(items) != 1 else ''}?",
+        description=f"They are gone for good and pay **{total} gold**.")
+    embed.add_field(name="Items", value="\n".join(shown), inline=False)
+    return embed
+
+
+def sell_result_embed(count: int, gold: int, total_gold: int) -> discord.Embed:
+    return discord.Embed(
+        title="Sold",
+        description=f"Sold {count} item{'s' if count != 1 else ''} for **{gold} gold**. "
+                    f"You now have {total_gold} gold.")
