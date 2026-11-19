@@ -437,3 +437,5 @@ play_cli.py
 
 data/*.db
 data/*.db-*
+
+.vscode/
