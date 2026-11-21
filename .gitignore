@@ -433,7 +433,6 @@ venv/
 ENV/
 env/
 
-play_cli.py
 
 data/*.db
 data/*.db-*
