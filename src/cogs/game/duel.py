@@ -8,7 +8,8 @@ from discord.ext import commands
 
 from src.cogs.game._common import require_player
 from src.game.combat import Move
-from src.game.economy import DUEL_XP_PER_DAY, DUEL_XP_WINDOW, duel_xp
+from src.game.daily import window_start
+from src.game.economy import DUEL_XP_PER_DAY, duel_xp
 from src.game.items import build_fighter
 from src.game.live_duel import LiveDuel, Submit
 from src.game.stats import duel_levels
@@ -142,8 +143,8 @@ class DuelRunner:
                 await db.add_duel("live", a, b, winner_id, live.duel.round,
                                   live.duel.seed, live.log_json())
                 # XP goes to both players in the same transaction as the saved result. Only the
-                # first DUEL_XP_PER_DAY duels in any rolling 24 hours count (this one is included).
-                since = int(time.time()) - DUEL_XP_WINDOW
+                # first DUEL_XP_PER_DAY duels since the daily reset count (this one is included).
+                since = window_start(int(time.time()))
                 for uid in (a, b):
                     if await db.duels_since(uid, since) > DUEL_XP_PER_DAY:
                         xp_lines.append(f"{live.name_of(uid)}: daily duel XP limit reached")

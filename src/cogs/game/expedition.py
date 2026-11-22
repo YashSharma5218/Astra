@@ -7,8 +7,8 @@ from discord.ext import commands
 
 from src.cogs.game._common import require_player
 from src.game.economy import XP_EXPEDITION, XP_PUSH_BONUS
-from src.game.loot import (DEFAULT_ZONE, MAX_RUNS, RUN_WINDOW, ZONES, Haul, build_item,
-                       next_run_at, roll_haul, roll_push)
+from src.game.loot import (DEFAULT_ZONE, MAX_RUNS, ZONES, Haul, build_item, next_reset,
+                       next_run_at, roll_haul, roll_push, window_start)
 from src.ui.embeds import (expedition_result_embed, expedition_started_embed, xp_line,
                        expedition_waiting_embed, haul_embed)
 
@@ -131,11 +131,11 @@ class Expedition(commands.Cog):
             # sent at the same moment cannot both start a run.
             running = await db.get_running_expedition(uid)
             if running is None:
-                starts = await db.expedition_starts_since(uid, now - RUN_WINDOW)
+                starts = await db.expedition_starts_since(uid, window_start(now))
                 free_at = next_run_at(starts, now)
                 if free_at is not None:
-                    problem = (f"You used all {MAX_RUNS} expeditions for now. "
-                               f"The next one is available <t:{free_at}:R>.")
+                    problem = (f"You used all {MAX_RUNS} expeditions for today. "
+                               f"They reset at <t:{free_at}:t> (<t:{free_at}:R>).")
                 elif zone.entry_fee and (await db.get_player(uid))["gold"] < zone.entry_fee:
                     problem = f"You need {zone.entry_fee} gold to enter {zone.name}."
                 else:
@@ -156,7 +156,7 @@ class Expedition(commands.Cog):
             await interaction.response.send_message(problem, ephemeral=True)
         else:
             await interaction.response.send_message(
-                embed=expedition_started_embed(zone, now + zone.duration, runs_left))
+                embed=expedition_started_embed(zone, now + zone.duration, runs_left, next_reset(now)))
 
 
 async def setup(bot):

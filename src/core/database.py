@@ -226,10 +226,10 @@ class Database:
         return cur.lastrowid
 
     async def expedition_starts_since(self, user_id: int, since: int) -> list[int]:
-        """Start times (oldest first) of all the player's expeditions that started after `since`,
+        """Start times (oldest first) of all the player's expeditions that started at or after `since`,
         whatever happened to them. Used for the runs-per-day limit."""
         cur = await self.conn.execute(
-            "SELECT started_at FROM expeditions WHERE user_id = ? AND started_at > ? ORDER BY started_at",
+            "SELECT started_at FROM expeditions WHERE user_id = ? AND started_at >= ? ORDER BY started_at",
             (user_id, since))
         return [r[0] for r in await cur.fetchall()]
 
@@ -257,9 +257,9 @@ class Database:
         return level, xp, gained
 
     async def duels_since(self, user_id: int, since: int) -> int:
-        """How many saved duels the player took part in after `since` (Unix seconds)."""
+        """How many saved duels the player took part in at or after `since` (Unix seconds)."""
         cur = await self.conn.execute(
-            "SELECT COUNT(*) FROM duels WHERE (player_a = ? OR player_b = ?) AND created_at > ?",
+            "SELECT COUNT(*) FROM duels WHERE (player_a = ? OR player_b = ?) AND created_at >= ?",
             (user_id, user_id, since))
         return (await cur.fetchone())[0]
 

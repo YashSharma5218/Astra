@@ -16,13 +16,13 @@ import json
 import random
 from dataclasses import dataclass, field
 
+from src.game.daily import DAY as RUN_WINDOW, RESET_UTC_SECONDS, next_reset, window_start  # noqa: F401
 from src.game.items import RARITIES, SLOTS, Item, generate_item
 
 PUSH_CHANCE = 0.55       # chance that Push Deeper succeeds
 PUSH_MULT = 2            # gold and shards are multiplied by this after a successful Push
 GEM_CHANCE = 0.30        # chance of one Socket Gem after a successful Push
-MAX_RUNS = 3             # expeditions a player can start in any rolling window of RUN_WINDOW seconds
-RUN_WINDOW = 24 * 60 * 60
+MAX_RUNS = 3             # expeditions a player can start between two daily resets
 
 
 @dataclass(frozen=True)
@@ -116,13 +116,11 @@ def build_item(spec: ItemSpec) -> Item:
 
 
 def next_run_at(starts: list[int], now: int) -> int | None:
-    """When the player can start another expedition, given the start times of their runs inside
-    the window (oldest first). None means they can start one right now. Every run frees its
-    charge RUN_WINDOW seconds after it started, so there is no daily reset time to think about."""
-    recent = sorted(t for t in starts if t > now - RUN_WINDOW)
-    if len(recent) < MAX_RUNS:
-        return None
-    return recent[-MAX_RUNS] + RUN_WINDOW
+    """When the player can start another expedition, given the start times of their runs (any
+    time). None means they can start one right now. All charges come back together at the daily
+    reset, so a player who used all MAX_RUNS waits until next_reset()."""
+    used = sum(1 for t in starts if t >= window_start(now))
+    return None if used < MAX_RUNS else next_reset(now)
 
 
 def seconds_left(ends_at: int, now: int) -> int:

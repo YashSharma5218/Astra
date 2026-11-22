@@ -15,8 +15,7 @@ XP_EXPEDITION = 30           # for every expedition you collect
 XP_PUSH_BONUS = 60           # extra, only when a Push Deeper succeeds (a lost Push gives nothing)
 XP_DUEL_WIN = 20
 XP_DUEL_OTHER = 10           # a loss or a draw
-DUEL_XP_PER_DAY = 3          # only this many duels in a rolling 24 hours give XP, so friends cannot farm each other
-DUEL_XP_WINDOW = 24 * 60 * 60
+DUEL_XP_PER_DAY = 3          # only this many duels a day give XP (the day resets at the shared daily reset), so friends cannot farm each other
 
 
 def sell_value(item: Item) -> int:

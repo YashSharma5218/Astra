@@ -153,11 +153,14 @@ def haul_lines(haul: Haul, items: list[Item] | None = None) -> str:
     return "\n".join(lines)
 
 
-def expedition_started_embed(zone: Zone, ends_at: int, runs_left: int | None = None) -> discord.Embed:
+def expedition_started_embed(zone: Zone, ends_at: int, runs_left: int | None = None,
+                             reset_at: int | None = None) -> discord.Embed:
     text = (f"Your fighter heads out and will be back <t:{ends_at}:R>.\n"
             "Use /scavenge again when time is up to collect it. You can close Discord in the meantime.")
     if runs_left is not None:
-        text += f"\nExpeditions left in this 24 hours: {runs_left} of {MAX_RUNS}."
+        text += f"\nExpeditions left today: {runs_left} of {MAX_RUNS}."
+        if reset_at is not None:
+            text += f" Resets at <t:{reset_at}:t>."
     return discord.Embed(title=f"Expedition: {zone.name}", description=text)
 
 
